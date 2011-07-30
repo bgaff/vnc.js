@@ -58,14 +58,14 @@ var RFBClient = function(tcp_client, rfb_canvas) {
 	this.VNC_FRAME_BUFFER_UPDATE = 1;
 	this._callbacks = {};
 	
-	
-	this._tmp_framebuffer = '';
-	this._tmp_framebufferArr = [];
-	this._tmp_w = 0;
-	this._tmp_h = 0;
-	this._tmp_x = 0;
-	this._tmp_y = 0;
-	this._bytes_pending = 0;
+	this._processing_buffer = false;
+	this._total_bytes_expected = 0;
+	this._buffer = [];
+	this._x = 0;
+	this._y = 0;
+	this._w = 0;
+	this._h = 0;
+	this._bail = false;
 };
 
 RFBClient.prototype.log = function(msg){
@@ -132,8 +132,8 @@ RFBClient.prototype.handleServerInit = function(data){
 		
 		this._vnc_server_init_received = true; // We're fucking ready to roll!
 		this._handshake_complete = true;
-		//this.frameBufferUpdateRequest(0,0,this._framebuffer_width, this._framebuffer_height);
-		this.frameBufferUpdateRequest(0,0,500,500);
+		//this.frameBufferUpdateRequest(0,0,1440, 900);
+		this.frameBufferUpdateRequest(0,0,1440,900);
 		//for(x = 0; x < this._framebuffer_width; x+=25){
 		//	for(y = 0; y < this._framebuffer_height; y+=25){
 		//		this.frameBufferUpdateRequest(x,y,25,25);
@@ -155,10 +155,10 @@ RFBClient.prototype.clientInit = function(){
 
 RFBClient.prototype.dataReceived = function(data){
 	var decodedData = Base64.decodeStr(data.data);
-	var decodedArr = Base64.decodeArr(data.data);
+	//var decodedArr = Base64.decodeArr(data.data);
 	var decodedIntArr = Base64.decodeIntArr(data.data);
 	
-	this.log("decodedDatalen :" + decodedData.length + ", arrLen: " + decodedArr.length );
+	this.log("decodedDatalen :" + decodedData.length + ", arrLen: " + decodedIntArr.length );
 	//this.log("data received: " + data.data);
 	
 	if(!this._server_version_received){
@@ -175,86 +175,120 @@ RFBClient.prototype.dataReceived = function(data){
 		return;
 	} else if (this._handshake_complete) {
 		/* we must examine the first byte to determine the type of packet it is */
-		if(this._bytes_pending > 0)
-			this.handleFrameBufferUpdate(decodedData,decodedArr,decodedIntArr);
-		var msgType = decodedData.charCodeAt(0);
-		if(msgType === this.RFB_FRAME_BUFFER_UPDATE){
-			this.handleFrameBufferUpdate(decodedData,decodedArr,decodedIntArr);
+		//if(this._bytes_pending > 0)
+		//	this.handleFrameBufferUpdate(decodedData,decodedIntArr);
+		if(this._processing_buffer){
+			this.handleFrameBufferUpdate(decodedData,decodedIntArr);
+		} else {
+			var msgType = decodedData.charCodeAt(0);
+			if(msgType === this.RFB_FRAME_BUFFER_UPDATE){
+				this.handleFrameBufferUpdate(decodedData,decodedIntArr);
+			} else {
+				//this.log("Unkown message type: " + msgType);
+			}
 		}
 	}
 };
 
-RFBClient.prototype.handleFrameBufferUpdate = function(data,dataArr,dataIntArr){
+RFBClient.prototype.handleFrameBufferUpdate = function(data,dataIntArr){
+	if(this._bail)
+	 return;
 	this.log("FrameBufferUpdate Received.");
+	if(this._processing_buffer){
+		this.log("We're still expecting: " + this._total_bytes_expected + ", this packet contains: " + dataIntArr.length);
 	
-	if(this._bytes_pending > 0){
-			this.log("Bytes pending : " + this._bytes_pending);
-			// we're still waiting for the rest of a previous framebuffer update.
-			var bytes_available = dataArr.length;
-			//var rgba_data = data.substring(offset, bytes_available);
-			var rgba_data = dataIntArr.slice(0, bytes_available);
-			this._tmp_framebufferArr = this._tmp_framebufferArr.concat(rgba_data);
-			console.log("tmpBufferLen: " + this._tmp_framebufferArr.length);
+		if(dataIntArr.length > this._total_bytes_expected){
+			// only grab what we need.
+			this._buffer = this._buffer.concat(dataIntArr.slice(0, this._total_bytes_expected));
+			var bytes_leftover = dataIntArr.length - parseInt(this._total_bytes_expected);
+			var total_bytes_expected_old = this._total_bytes_expected;
+			this.log("Completed frame with " + dataIntArr.length + " - " + this._total_bytes_expected + " = " + bytes_leftover + " leftover.")
+			this._total_bytes_expected = 0;
+			this._processing_buffer = false;
+			//this._bail = true;
+			this.emit(this.VNC_FRAME_BUFFER_UPDATE, {x: this._x, y: this._y, w: this._w, h: this._h, data: this._buffer});
+			this._buffer = [];
 			
-			//this._tmp_framebuffer += rgba_data;
-			this._bytes_pending -= bytes_available;
-			if(this._bytes_pending <= 0){
-				this.emit(this.VNC_FRAME_BUFFER_UPDATE, {x: this._tmp_x, y: this._tmp_y, w: this._tmp_w, h: this._tmp_h, data: this._tmp_framebufferArr});
-				this._tmp_framebufferArr = [];
-				this._bytes_pending = 0;
-			}
+			// pass the leftvoers back to handleFrameBuffer
+			var leftOvers = dataIntArr.slice(total_bytes_expected_old, dataIntArr.length)
+			this.handleFrameBufferUpdate(data,leftOvers);
 			return;
-	}
-
-	var numRectangles = (data.charCodeAt(2) << 8) | data.charCodeAt(3);
-	var offset = 4;
-	this.log("numRectangles = " + numRectangles);
-	for(var i = 0; i < numRectangles; i++){
-		var x_pos = (data.charCodeAt(offset + 0) << 8) | data.charCodeAt(offset + 1);
-		var y_pos = (data.charCodeAt(offset + 2) << 8) | data.charCodeAt(offset + 3);
-		var width = (data.charCodeAt(offset + 4) << 8) | data.charCodeAt(offset + 5);
-		var height = (data.charCodeAt(offset + 6) << 8) | data.charCodeAt(offset + 7);
-		var encodingType = ((data.charCodeAt(offset + 8) << 24) | 
-						   (data.charCodeAt(offset + 9) << 16) |
-						   (data.charCodeAt(offset + 10) << 8)  |
-						   (data.charCodeAt(offset + 11)));
-		offset += 12;
-		if(encodingType === this.RFB_ENCODING_RAW){
-			var buffer_size = width * height * (this._bits_per_pixel / 8);
-			this.log("Rectangle: " + i + ", Encoding: RAW, x: " + x_pos + ", y: " + y_pos +  ", width: " + width + ", height: " + height +  ", buffer size: " + buffer_size);
-			this._bytes_pending = buffer_size;
-			
-			var bytes_available = dataArr.length - offset;
-			this.log("First packet bytes: " + bytes_available);
-			
-			//this.emit(this.VNC_FRAME_BUFFER_UPDATE, {x: x_pos, y: y_pos, w: width, h: height, data: dataArr.splice(offset)});
-			var rgba_data = dataIntArr.slice(offset, bytes_available);
-			//this.log("First packet: " + rgba_data);
-			this._tmp_framebufferArr = this._tmp_framebufferArr.concat(rgba_data);
-			//this._tmp_framebuffer += rgba_data;
-			this._bytes_pending -= bytes_available;
-
-			this._tmp_x = x_pos;
-			this._tmp_y = y_pos;
-			this._tmp_w = width;
-			this._tmp_h = height;
-			//this.emit(this.VNC_FRAME_BUFFER_UPDATE, {x: this._tmp_x, y: this._tmp_y, w: this._tmp_w, h: this._tmp_h, data: this._tmp_framebufferArr});
-
-
-			if(this._bytes_pending <= 0){
-				this.emit(this.VNC_FRAME_BUFFER_UPDATE, {x: this._tmp_x, y: this._tmp_y, w: this._tmp_w, h: this._tmp_h, data: this._tmp_framebufferArr});
-				this._bytes_pending = 0;
-				this._tmp_framebufferArr = [];
-			}
-			offset += buffer_size;
-
 		} else {
-			this.log("Rectangle: " + i + " / " + numRectangles + ", Encoding: " + encodingType);
+			// take everything
+			this._total_bytes_expected -= dataIntArr.length;
+			this._buffer = this._buffer.concat(dataIntArr.slice(0, dataIntArr.length));
+			
+			if(this._total_bytes_expected === 0){
+				this._processing_buffer = false;
+
+				this.emit(this.VNC_FRAME_BUFFER_UPDATE, {x: this._x, y: this._y, w: this._w, h: this._h, data: this._buffer});
+				this._buffer = [];
+			}
+			
+			return;
 		}
 		
 		
+	
 		
-	}	
+	}
+
+	if(!this._processing_buffer){
+		// this is a new buffer window		
+		var numRectangles = (dataIntArr[2] << 8) | dataIntArr[3];
+		this.log("numRectangles = " + numRectangles);
+		
+		var offset = 4;
+		for(var i = 0; i < numRectangles; i++){
+				var x_pos = (dataIntArr[offset + 0] << 8) | dataIntArr[offset + 1];
+				var y_pos = (dataIntArr[offset + 2] << 8) | dataIntArr[offset + 3];
+				var width = (dataIntArr[offset + 4] << 8) | dataIntArr[offset + 5];
+				var height = (dataIntArr[offset + 6] << 8) | dataIntArr[offset + 7];
+				var encodingType = ((dataIntArr[offset + 8] << 24) | 
+								   (dataIntArr[offset + 9] << 16) |
+								   (dataIntArr[offset + 10] << 8)  |
+								   (dataIntArr[offset + 11]));
+								
+				this._x = x_pos;
+				this._y = y_pos;
+				this._w = width;
+				this._h = height;
+			
+				this.log("Frame width: " + width + ", height: " + height + ", x:" + x_pos + ", y:" + y_pos);
+				if(encodingType === this.RFB_ENCODING_RAW){
+						var buffer_size = width * height * (this._bits_per_pixel / 8);
+						this.log("We are expecting " + buffer_size + " bytes");
+						
+						this._processing_buffer = true;
+						this._total_bytes_expected = buffer_size;
+						
+						var total_bytes_available_now = dataIntArr.length - 16; // 16 byte header
+			
+						this._buffer = this._buffer.concat(dataIntArr.splice(16, 16 + total_bytes_available_now));
+						this._total_bytes_expected -= total_bytes_available_now;
+						
+						if(this._total_bytes_expected < 0)
+							this.log("WTF WE ARE LESS THAN ZERO!!!!");
+						
+						if(this._total_bytes_expected === 0){
+							// we can send now.
+							this.log("Ready to render now...");
+							this._total_bytes_expected = 0;
+							this._processing_buffer = false;
+							//this._bail = true;
+							this.emit(this.VNC_FRAME_BUFFER_UPDATE, {x: this._x, y: this._y, w: this._w, h: this._h, data: this._buffer});
+							this._buffer = [];
+						} else {
+							return;
+						}
+					
+						
+				} else {
+					//this.log("Unknown encoding type: " + encodingType);
+				}
+				
+		}
+	}
 };
 
 RFBClient.prototype.authenticationResponse = function(data){

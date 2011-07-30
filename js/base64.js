@@ -124,7 +124,7 @@ var Base64 = {
  		var x = 0;
 		var outarr = [];
 		
-		input = input.replace(/[^A-Za-z0-9\+\/\=]/g, "");
+		//input = input.replace(/[^A-Za-z0-9\+\/\=]/g, "");
  
 		while (i < input.length) {
  
@@ -146,7 +146,7 @@ var Base64 = {
 			}
 			if (enc4 != 64) {
 				output = output + String.fromCharCode(chr3);
-				outarr[x++] = chr1;
+				outarr[x++] = chr3;
 			}
  
 		}

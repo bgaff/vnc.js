@@ -21,12 +21,14 @@ RFBCanvas.prototype.drawRect = function(x_offset, y_offset, w, h, rgba_data) {
             //var g = rgba_data.charCodeAt(idx + 1);
             //var r = rgba_data.charCodeAt(idx + 2);
             //var a = rgba_data.charCodeAt(idx + 3);
-				
+			
+		
             var b = rgba_data[idx + 0];
             var g = rgba_data[idx + 1];
             var r = rgba_data[idx + 2];
-            var a = rgba_data[idx + 3];
-
+			var a = rgba_data[idx + 3];	
+            //if(a === 0)
+			//	return;
 
             canvas_data.data[idx + 0] = r;
             canvas_data.data[idx + 1] = g;
