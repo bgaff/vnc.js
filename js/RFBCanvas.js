@@ -10,7 +10,7 @@ RFBCanvas.prototype.resize = function(w, h) {
     this._canvas.height = h;
 };
 
-RFBCanvas.prototype.drawRect = function(x, y, w, h, rgba_data) {
+RFBCanvas.prototype.drawRect = function(x_offset, y_offset, w, h, rgba_data) {
     var canvas_data = this._context.createImageData(w, h);
 
     for (var x = 0; x < w; x++) {
@@ -21,10 +21,6 @@ RFBCanvas.prototype.drawRect = function(x, y, w, h, rgba_data) {
             var b = rgba_data.charCodeAt(idx + 2);
             var a = rgba_data.charCodeAt(idx + 3);
 
-            if (x == 0 && y == 0) {
-                console.log("rgba(" + r + ", " + g + ", " + b + ", " + a + ")");
-            }
-
             canvas_data.data[idx + 0] = r;
             canvas_data.data[idx + 1] = g;
             canvas_data.data[idx + 2] = b;
@@ -32,5 +28,5 @@ RFBCanvas.prototype.drawRect = function(x, y, w, h, rgba_data) {
         }
     }
 
-    this._context.putImageData(canvas_data, x, y);
+    this._context.putImageData(canvas_data, x_offset, y_offset);
 };
