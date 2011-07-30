@@ -1,5 +1,6 @@
-var RFBClient = function(tcp_client) {
+var RFBClient = function(tcp_client, rfb_canvas) {
 	this._tcpClient = tcp_client;
+    this._rfbCanvas = rfb_canvas;
 	
 	/* first stage of hand shake: version exchange */
 		this._server_version_received = false;
@@ -45,6 +46,8 @@ var RFBClient = function(tcp_client) {
 		
 	/* now we're done with handshaking */
 		this._handshake_complete = false;	
+
+	this._callbacks = {};
 };
 
 RFBClient.prototype.log = function(msg){
@@ -87,6 +90,8 @@ RFBClient.prototype.handleServerInit = function(data){
 		
 		this._server_init_received = true; // We're fucking ready to roll!
 		this._handshake_complete = true;
+
+		this.emit("serverInit");
 };
 
 RFBClient.prototype.clientInit = function(){
@@ -209,4 +214,15 @@ RFBClient.prototype.handleServerVersion = function(data){
 		this._tcpClient.send("RFB 003.003\n"); // we will implement a simple version of RFB (v3.3)
 		this._client_version_sent = true;
 	}
+};
+
+RFBClient.prototype.emit = function(event, param) {
+	if(typeof this._callbacks[event] === 'function')
+		this._callbacks[event].call(this, param);
+};
+
+RFBClient.prototype.on = function(event, callback) {
+	if(typeof callback === 'function')
+		this._callbacks[event] = callback;
+	return this;
 };
