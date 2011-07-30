@@ -16,9 +16,9 @@ RFBCanvas.prototype.drawRect = function(x_offset, y_offset, w, h, rgba_data) {
     for (var x = 0; x < w; x++) {
         for (var y = 0; y < w; y++) {
             var idx = (x + y * w) * 4;
-            var r = rgba_data.charCodeAt(idx + 0);
+            var b = rgba_data.charCodeAt(idx + 0);
             var g = rgba_data.charCodeAt(idx + 1);
-            var b = rgba_data.charCodeAt(idx + 2);
+            var r = rgba_data.charCodeAt(idx + 2);
             var a = rgba_data.charCodeAt(idx + 3);
 
             canvas_data.data[idx + 0] = r;
