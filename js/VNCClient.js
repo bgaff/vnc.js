@@ -1,5 +1,10 @@
 var VNCClient = function(canvas) {
 	this._rfb_canvas = new RFBCanvas(canvas);
+	this._socket = false;
+};
+
+VNCClient.prototype.send = function(data){
+	this._socket.send(data,'base64');
 };
 
 VNCClient.prototype.serverInitComplete = function(rfb_client) {
@@ -40,6 +45,7 @@ VNCClient.prototype.connect = function(host, port) {
 	var port = 5900;
 
 	var sock = new TCPClient(host,port);
+	this._socket = sock;
 	var rfb_client = new RFBClient(sock);
 	this.bindEvents(rfb_client);
 
