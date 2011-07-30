@@ -1,6 +1,7 @@
 var RFBClient = function(tcp_client, rfb_canvas) {
 	this._tcpClient = tcp_client;
     this._rfbCanvas = rfb_canvas;
+	this.processor = new FrameBufferProcessor(this);
 	
 	/* first stage of hand shake: version exchange */
 		this._server_version_received = false;
@@ -66,6 +67,7 @@ var RFBClient = function(tcp_client, rfb_canvas) {
 	this._processing_buffer = false;
 	this._total_bytes_expected = 0;
 	this._buffer = [];
+	this._rectangles_to_process = 0;
 	this._x = 0;
 	this._y = 0;
 	this._w = 0;
@@ -148,7 +150,7 @@ RFBClient.prototype.handleServerInit = function(data){
 		this.log("Server Init, True Color Flag: " + this._true_color_flag + ", Red Max: " + this._red_max + ", Green Max: " + this._green_max + ", Blue Max: " + this._blue_max);
 		this.log("Server Init, Red Shift: " + this._red_shift + ", Green Shift: " + this._green_shift + ", Blue Shift: " + this._blue_shift);
 		
-		this.setEncodings(); /* tell the server we support CopyRect and Raw */
+		//this.setEncodings(); /* tell the server we support CopyRect and Raw */
 			
 		this._vnc_server_init_received = true; // We're fucking ready to roll!
 		this._handshake_complete = true;
@@ -201,17 +203,101 @@ RFBClient.prototype.dataReceived = function(data){
 		/* we must examine the first byte to determine the type of packet it is */
 		//if(this._bytes_pending > 0)
 		//	this.handleFrameBufferUpdate(decodedData,decodedIntArr);
-		if(this._processing_buffer){
-			this.handleFrameBufferUpdate(decodedData,decodedIntArr);
-		} else {
+		//if(this._processing_buffer){
+		this.processor.dataArrived(decodedIntArr);
+		//	this.handleFrameBufferUpdate(decodedData,decodedIntArr);
+		/*} else {
 			var msgType = decodedData.charCodeAt(0);
 			if(msgType === this.RFB_FRAME_BUFFER_UPDATE){
 				this.handleFrameBufferUpdate(decodedData,decodedIntArr);
 			} else {
 				this.log("Unkown message type: " + msgType);	
 			}
-		}
+		}*/
 	}
+};
+
+
+var FrameBufferProcessor = function(_rfbClient) {
+	this.rfbClient = _rfbClient;
+	this.global_buffer = [];
+	this.header_received = false;
+	this.number_rects_remaining = 0;
+	
+	this.current_rect_header_received = false;
+	this.current_rect_buffer = [];
+	this.current_rect_bytes_left = 0;
+	this.current_rect_x = 0;
+	this.current_rect_y = 0;
+	this.current_width = 0;
+	this.current_height = 0;
+	
+	this.dataArrived = function(dataIntArr){
+		this.global_buffer = this.global_buffer.concat(dataIntArr); /* we're already running, just tack this on */
+		
+		if(!this.header_received){
+			// the first 12 bytes are going to be our header information.
+			this.header_received = true;
+			this.number_rects_remaining = (	this.global_buffer[2] << 8) | 	this.global_buffer[3];
+			this.global_buffer = this.global_buffer.slice(4, this.global_buffer.length);
+			console.log("Expecting " + this.number_rects_remaining + " rectangles");
+		} 
+		
+		this.process();
+	};
+	
+	this.process = function() {
+		if(!this.current_rect_header_received){
+			// read the rect header
+			var x_pos = (this.global_buffer[0] << 8) | this.global_buffer[1];
+			var y_pos = (this.global_buffer[2] << 8) | this.global_buffer[3];
+			var width = (this.global_buffer[4] << 8) | this.global_buffer[5];
+			var height = (this.global_buffer[6] << 8) | this.global_buffer[7];
+			var encodingType = ((this.global_buffer[8] << 24) | 
+							   (this.global_buffer[9] << 16) |
+							   (this.global_buffer[10] << 8)  |
+							   (this.global_buffer[11]));
+							
+			this.current_rect_x = x_pos;
+			this.current_rect_y = y_pos;
+			this.current_width = width;
+			this.current_height = height;
+			var blah = this.global_buffer.splice(0, 12);
+			console.log("Current Rect: x:" + x_pos + ", y:" + y_pos + ", width: " + width + ", height: " + height);
+			
+			this.current_rect_header_received = true;
+			this.current_rect_bytes_left = width * height * 4; /* shouldn't be hard coded, but whatever */
+			if(this.global_buffer.length > 0)
+			 this.process();
+		} else {
+			if(this.global_buffer.length >= this.current_rect_bytes_left){
+				// we have enough data to render our rect.
+				var rect = this.global_buffer.splice(0, this.current_rect_bytes_left);
+				this.rfbClient.emit(this.rfbClient.VNC_FRAME_BUFFER_UPDATE, {x: this.current_rect_x, y: this.current_rect_y, w: this.current_width, h: this.current_height, data: rect});
+				this.current_rect_bytes_left = 0;
+				this.current_rect_header_received = false;
+				if(--this.number_rects_remaining <= 0){
+				 console.log("All rects processed!!!");
+				 this.header_received = false;
+				 this.number_rects_remaining = 0;
+				 if(this.global_buffer.length > 0)
+				 {
+				  this.dataArrived([]);
+				 }
+			     else
+				  return;
+			    }
+				else
+				 this.process();
+			}
+		}
+	};
+	
+};
+
+
+RFBClient.prototype.newHandleBufferUpdate = function(data, dataIntArr){
+	
 };
 
 RFBClient.prototype.handleFrameBufferUpdate = function(data,dataIntArr){
@@ -220,6 +306,14 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data,dataIntArr){
 	this.log("FrameBufferUpdate Received.");
 	if(this._processing_buffer){
 		this.log("We're still expecting: " + this._total_bytes_expected + ", this packet contains: " + dataIntArr.length);
+	
+		if(this._total_bytes_expected === 0){
+			
+			this._processing_buffer = false;
+			this._buffer = [];
+			return;
+			
+		}
 	
 		if(dataIntArr.length > this._total_bytes_expected){
 			// only grab what we need.
@@ -231,11 +325,15 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data,dataIntArr){
 			this._processing_buffer = false;
 			//this._bail = true;
 			this.emit(this.VNC_FRAME_BUFFER_UPDATE, {x: this._x, y: this._y, w: this._w, h: this._h, data: this._buffer});
+			this._rectangles_to_process--;
 			this._buffer = [];
 			
 			// pass the leftvoers back to handleFrameBuffer
 			var leftOvers = dataIntArr.slice(total_bytes_expected_old, dataIntArr.length)
-			this.handleFrameBufferUpdate(data,leftOvers);
+			if(this._rectangles_to_process == 0)
+				this.handleFrameBufferUpdate(data,leftOvers);
+			else
+				this.log("More rectangles to process and we don't have the data for it...");
 			return;
 		} else {
 			// take everything
@@ -259,6 +357,7 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data,dataIntArr){
 		// this is a new buffer window		
 		var numRectangles = (dataIntArr[2] << 8) | dataIntArr[3];
 		this.log("numRectangles = " + numRectangles);
+		this._rectangles_to_process = numRectangles;
 		//if(numRectangles > 1) return;
 		var offset = 4;
 		for(var i = 0; i < numRectangles; i++){
@@ -275,6 +374,10 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data,dataIntArr){
 				this._y = y_pos;
 				this._w = width;
 				this._h = height;
+				
+				if(this._w === 0 || this._h === 0)
+				 return;
+				
 				var bytes_written = 0;
 				this.log("Frame width: " + width + ", height: " + height + ", x:" + x_pos + ", y:" + y_pos);
 				if(encodingType === this.RFB_ENCODING_RAW){
@@ -300,13 +403,19 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data,dataIntArr){
 							return;
 						}
 						if(this._total_bytes_expected === 0){
-							// we can send now.
+							// we can send now.s
+							if(this._w === 0 || this._h === 0)
+							 return;
 							this.log("Ready to render now...");
 							this._total_bytes_expected = 0;
 							this._processing_buffer = false;
+							this._rectangles_to_process--;
 							//this._bail = true;
 							this.emit(this.VNC_FRAME_BUFFER_UPDATE, {x: this._x, y: this._y, w: this._w, h: this._h, data: this._buffer});
 							this._buffer = [];
+							if(this._rectangles_to_process > 0) {
+								
+							}
 						} else {
 							return;
 						}
