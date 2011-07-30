@@ -1,0 +1,46 @@
+<html>
+<head>
+	<title>Webterm</title>
+	<script src="js/jquery-min.js"></script>
+	<script src="js/underscore-min.js"></script>
+	<script src="/socket.io/socket.io.js"></script>
+	<script src="js/des.js"></script>
+	<script src="js/base64.js"></script>
+	<script src="js/RFB.js"></script>
+	<script src="JSTCP/jstcp.js"></script>
+</head>
+<script>
+
+ //
+ //  Establish the TCP connection and pass it to the RFB Client
+ //
+ var log = function(msg) { console.log(msg) };
+
+ var host = "127.0.0.1";
+ var port = 5900;
+
+ var sock = new TCPClient(host,port);
+ var RFBClient = new RFBClient(sock);
+
+ sock.on("connected", function() {
+	log("connected to " + host + ":" + port);
+ });
+
+ sock.on("closed", function() {
+    log("The connection has <strong>closed</strong> :(");
+ });
+
+ sock.on("data", function(msg){
+	log("data arrived: " + msg.data);
+	if(msg.encoding === 'base64'){
+		RFBClient.dataReceived(msg);
+	}
+ });
+
+ sock.connect();
+
+</script>
+<body>
+	<div id="debug"></div>
+</body>
+</html>
