@@ -23,8 +23,6 @@ var RFBClient = function(tcp_client) {
 	/* during initialization phase */
 		this._vnc_client_init_sent = false;
 		this._vnc_server_init_received = false;
-		
-	 	this._handshake_complete = false;	
 	
 	/* server init data */
 		this._framebuffer_width = 0;
@@ -45,6 +43,8 @@ var RFBClient = function(tcp_client) {
 		this._green_shift = 0;
 		this._blue_shift = 0;
 		
+	/* now we're done with handshaking */
+		this._handshake_complete = false;	
 };
 
 RFBClient.prototype.log = function(msg){
@@ -86,6 +86,7 @@ RFBClient.prototype.handleServerInit = function(data){
 		this.log("Server Init, Red Shift: " + this._red_shift + ", Green Shift: " + this._green_shift + ", Blue Shift: " + this._blue_shift);
 		
 		this._server_init_received = true; // We're fucking ready to roll!
+		this._handshake_complete = true;
 };
 
 RFBClient.prototype.clientInit = function(){
