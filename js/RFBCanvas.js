@@ -6,8 +6,8 @@ var RFBCanvas = function(canvas) {
 };
 
 RFBCanvas.prototype.resize = function(w, h) {
-    this._canvas.style.width  = w;
-    this._canvas.style.height = h;
+    this._canvas.width  = w;
+    this._canvas.height = h;
 };
 
 RFBCanvas.prototype.drawRect = function(x, y, w, h, rgba_data) {
@@ -16,10 +16,14 @@ RFBCanvas.prototype.drawRect = function(x, y, w, h, rgba_data) {
     for (var x = 0; x < w; x++) {
         for (var y = 0; y < w; y++) {
             var idx = (x + y * w) * 4;
-            var r = rgba_data[idx + 0];
-            var g = rgba_data[idx + 1];
-            var b = rgba_data[idx + 2];
-            var a = rgba_data[idx + 2];
+            var r = rgba_data.charCodeAt(idx + 0);
+            var g = rgba_data.charCodeAt(idx + 1);
+            var b = rgba_data.charCodeAt(idx + 2);
+            var a = rgba_data.charCodeAt(idx + 3);
+
+            if (x == 0 && y == 0) {
+                console.log("rgba(" + r + ", " + g + ", " + b + ", " + a + ")");
+            }
 
             canvas_data.data[idx + 0] = r;
             canvas_data.data[idx + 1] = g;
@@ -27,4 +31,6 @@ RFBCanvas.prototype.drawRect = function(x, y, w, h, rgba_data) {
             canvas_data.data[idx + 3] = a;
         }
     }
+
+    this._context.putImageData(canvas_data, x, y);
 };

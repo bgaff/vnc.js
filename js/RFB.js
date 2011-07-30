@@ -184,7 +184,10 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data){
 		if(encodingType === this.RFB_ENCODING_RAW){
 			var buffer_size = width * height * (this._bits_per_pixel / 8);
 			this.log("Rectangle: " + i + ", Encoding: RAW, x: " + x_pos + ", y: " + y_pos +  ", width: " + width + ", height: " + height +  ", buffer size: " + buffer_size);
-			
+
+			var rgba_data = data.substring(offset, offset + buffer_size);
+			this.emit(this.VNC_FRAME_BUFFER_UPDATE, {x: x_pos, y: y_pos, w: width, h: height, data: rgba_data});
+
 			offset += buffer_size;
 		} else {
 			this.log("Rectangle: " + i + " / " + numRectangles + ", Encoding: " + encodingType);

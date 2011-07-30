@@ -9,7 +9,7 @@ VNCClient.prototype.serverInitComplete = function(rfb_client) {
 };
 
 VNCClient.prototype.frameBufferUpdate = function(rfb_client, update) {
-	console.log("LOL");
+	this._rfb_canvas.drawRect(update.x, update.y, update.w, update.h, update.data);
 };
 
 VNCClient.prototype.bindEvents = function(rfb_client) {
