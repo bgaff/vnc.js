@@ -123,15 +123,10 @@ RFBClient.prototype.handleServerInit = function(data){
 		
 		this._vnc_server_init_received = true; // We're fucking ready to roll!
 		this._handshake_complete = true;
-<<<<<<< Updated upstream
 		//this.frameBufferUpdateRequest(0,0,this._framebuffer_width, this._framebuffer_height);
 		this.frameBufferUpdateRequest(0,0, 100, 100);
-		this.emit("serverInit");
-=======
-		this.frameBufferUpdateRequest(0,0,this._framebuffer_width, this._framebuffer_height);
 		
 		this.emit(this.VNC_SERVER_INIT_COMPLETE);
->>>>>>> Stashed changes
 };
 
 RFBClient.prototype.clientInit = function(){
