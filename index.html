@@ -13,6 +13,113 @@
 </head>
 <script>
 
+
+var evtTypeMap = [];
+var keyMap = [];
+
+keyMap[8]       =       0x08;   // BackSpace
+keyMap[9]       =       0x09;   // TAB
+keyMap[13]      =       0x0d;  // RETURN
+keyMap[27]      =       0x1b;   // ESCAPE
+keyMap[45]      =       0x63;   // INSERT
+keyMap[46]      =       0xff;   // DELETE
+keyMap[36]      =       0x50;   // HOME
+keyMap[35]      =       0x57;   // END
+keyMap[33]      =       0x55;   // PAGE UP
+keyMap[34]      =       0x56;   // PAGE DOWN
+keyMap[37]      =       0x51;   // LEFT
+keyMap[38]      =       0x52;   // UP
+keyMap[39]      =       0x53;   // RIGHT
+keyMap[40]      =       0x54;   // DOWN
+
+keyMap[112]     =       0xbe;   // F1
+keyMap[113]     =       0xbf;   // F2
+keyMap[114]     =       0xc0;   // F3
+keyMap[115]     =       0xc1;   // F4
+keyMap[116]     =       0xc2;   // F5
+keyMap[117]     =       0xc3;   // F6
+keyMap[118]     =       0xc4;   // F7
+keyMap[119]     =       0xc5;   // F8
+keyMap[120]     =       0xc6;   // F9
+keyMap[121]     =       0xc7;   // F10
+keyMap[122]     =       0xc8;   // F11
+keyMap[123]     =       0xc9;   // F12
+
+keyMap[16]              =       0xe1;   // SHIFT (LEFT)
+// keyMap[16]   =       0xe2    // SHIFT (RIGHT)
+keyMap[17]              =       0xe3;   // CONTROL (LEFT)
+//keyMap[17]    =       0xe4    // CONTROL (RIGHT)
+keyMap[18]                      =       0xe7;   // ALT (LEFT)
+//keyMap[18]    =       0xe8    // ALT (RIGHT)
+
+function parseKeyEvent(e)
+{
+       var evt = e || window.event;
+       var arr = [];
+
+       arr[0] = 4;
+       arr[1] = parseDownFlag(e);
+       arr[2] = 0;
+       arr[3] = 0;
+       arr[4] = 0;
+       arr[5] = 0;
+       arr[6] = readKey(e, 1);
+       arr[7] = readKey(e, 0);
+
+   console.log(arr);
+
+   return Base64.encodeIntArr(arr);
+}
+
+function parseDownFlag(evt)
+{
+       if (evt.type == 'keydown')
+       {
+               return 1;
+       } else
+       {
+               return 0;
+       }
+}
+
+function readKey(e, i)
+{
+       var k = keyMap[e.keyCode];
+       var rst;
+       if (k == undefined)
+       {
+               rst = e.keyCode;
+       } else
+       {
+               rst = k;
+       }
+   return (rst & (0xFF << (i*8))) >> (i*8);
+}
+
+function parseMouseEvent(evt)
+{
+   var button = evt.which;
+   var buttonMask = button == 1 ? 1 : 2
+   var arr = [];
+
+   arr[0] = 5;
+   arr[1] = buttonMask;
+   arr[2] = (evt.x & 0xFF00) >> 8;
+   arr[3] = evt.x & 0xFF;
+   arr[4] = (evt.y & 0xFF00) >> 8;
+   arr[5] = evt.y & 0xFF;
+
+   if (evt.preventDefault)
+       evt.preventDefault();
+   else
+       evt.returnValue = false;
+
+   console.log(arr);
+
+   return Base64.encodeIntArr(arr);
+}
+
+
  $(document).ready(function() {
 	var host = "127.0.0.1";
 	var port = 5900;
@@ -20,6 +127,12 @@
     var canvas = document.getElementById("vnc-canvas");
     var vnc = new VNCClient(canvas);
     vnc.connect(host, port);
+
+	 $(document).keydown (parseKeyAndSend);
+	 $(document).keyup   (parseKeyAndSend);
+	//      $(document).keypress(parseKeyAndSend);
+
+	 $(document).click(parseMouseAndSend);
  });
 
 </script>

@@ -231,6 +231,7 @@ var FrameBufferProcessor = function(_rfbClient) {
 	this.current_rect_y = 0;
 	this.current_width = 0;
 	this.current_height = 0;
+	this.current_copyrect = false;
 	
 	this.dataArrived = function(dataIntArr){
 		this.global_buffer = this.global_buffer.concat(dataIntArr); /* we're already running, just tack this on */
@@ -264,18 +265,32 @@ var FrameBufferProcessor = function(_rfbClient) {
 			this.current_height = height;
 			var blah = this.global_buffer.splice(0, 12);
 			console.log("Current Rect: x:" + x_pos + ", y:" + y_pos + ", width: " + width + ", height: " + height);
-			
-			this.current_rect_header_received = true;
-			this.current_rect_bytes_left = width * height * 4; /* shouldn't be hard coded, but whatever */
+			if(encodingType === this.rfbClient.RFB_ENCODING_COPYRECT){
+				console.log("COPYRECT RECEIVED!!");
+				this.current_copyrect = true;
+				this.current_rect_bytes_left = 4;
+			} else {
+			 this.current_rect_header_received = true;
+			 this.current_rect_bytes_left = width * height * 4; /* shouldn't be hard coded, but whatever */
+			}
 			if(this.global_buffer.length > 0)
 			 this.process();
 		} else {
 			if(this.global_buffer.length >= this.current_rect_bytes_left){
 				// we have enough data to render our rect.
 				var rect = this.global_buffer.splice(0, this.current_rect_bytes_left);
-				this.rfbClient.emit(this.rfbClient.VNC_FRAME_BUFFER_UPDATE, {x: this.current_rect_x, y: this.current_rect_y, w: this.current_width, h: this.current_height, data: rect});
+				if(!this.current_copyrect){
+					this.rfbClient.emit(this.rfbClient.VNC_FRAME_BUFFER_UPDATE, {x: this.current_rect_x, y: this.current_rect_y, w: this.current_width, h: this.current_height, data: rect});
+				} else {
+				  var src_x_pos = (rect[0] << 8) | rect[1];
+				  var src_y_pos = (rect[2] << 8) | rect[3];
+				  console.log("Copy recting src_x:" + src_x_pos + ", src_y:" + src_y_pos + ", to_x:" + this.current_rect_x + ", to_y:" + this.current_rect_y + ", width: " + this.current_width + ", height: " + this.current_height);
+				  this.rfbClient.emit(this.rfbClient.VNC_FRAME_BUFFER_COPYRECT, {x: this.current_rect_x, y: this.current_rect_y, w: this.current_width, h: this.current_height , src_x: src_x_pos, src_y: src_y_pos});
+				}
 				this.current_rect_bytes_left = 0;
 				this.current_rect_header_received = false;
+				this.current_copyrect = false;
+				
 				if(--this.number_rects_remaining <= 0){
 				 console.log("All rects processed!!!");
 				 this.header_received = false;

@@ -25,6 +25,7 @@ VNCClient.prototype.bindEvents = function(rfb_client) {
 		vnc.frameBufferUpdate(this, update);
 	});
 	rfb_client.on(rfb_client.VNC_FRAME_BUFFER_COPYRECT, function(update) {
+		console.log("Copy rect called");
 		vnc.frameBufferCopyrect(this, update);
 	});
 };
