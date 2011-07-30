@@ -6,8 +6,8 @@ var RFBCanvas = function(canvas) {
 };
 
 RFBCanvas.prototype.resize = function(w, h) {
-    $(this._canvas).width (w);
-    $(this._canvas).height(h);
+    this._canvas.style.width  = w;
+    this._canvas.style.height = h;
 };
 
 RFBCanvas.prototype.drawRect = function(x, y, w, h, rgba_data) {

@@ -6,47 +6,20 @@
 	<script src="/socket.io/socket.io.js"></script>
 	<script src="js/des.js"></script>
 	<script src="js/base64.js"></script>
-	<script src="js/RFBCanvas.js"></script>
 	<script src="js/RFB.js"></script>
+	<script src="js/RFBCanvas.js"></script>
+	<script src="js/VNCClient.js"></script>
 	<script src="JSTCP/jstcp.js"></script>
 </head>
 <script>
 
  $(document).ready(function() {
-     //
-     //  Establish the TCP connection and pass it to the RFB Client
-     //
-     var log = function(msg) { console.log(msg) };
+	var host = "127.0.0.1";
+	var port = 5900;
 
-     var host = "127.0.0.1";
-     var port = 5900;
-
-     var rfb_canvas = new RFBCanvas(document.getElementById("vnc-canvas"));
-
-     var sock = new TCPClient(host,port);
-     var rfb_client = new RFBClient(sock);
-
-     rfb_client.on("serverInit", function() {
-         rfb_canvas.resize(this._framebuffer_width, this._framebuffer_height);
-         document.title = this._server_name;
-     });
-
-     sock.on("connected", function() {
-        console.log("connected to " + host + ":" + port);
-     });
-
-     sock.on("closed", function() {
-        console.log("The connection has <strong>closed</strong> :(");
-     });
-
-     sock.on("data", function(msg){
-        //log("data arrived: " + msg.data);
-        if(msg.encoding === 'base64'){
-            rfb_client.dataReceived(msg);
-        }
-     });
-
-     sock.connect();
+    var canvas = document.getElementById("vnc-canvas");
+    var vnc = new VNCClient(canvas);
+    vnc.connect(host, port);
  });
 
 </script>

@@ -47,13 +47,15 @@ var RFBClient = function(tcp_client, rfb_canvas) {
 	/* now we're done with handshaking */
 		this._handshake_complete = false;	
 
-
 	/* VNC Constants */
 	this.RFB_FRAME_BUFFER_UPDATE_REQUEST = 3;
 	this.RFB_FRAME_BUFFER_UPDATE = 0;
 	
 	this.RFB_ENCODING_RAW = 0;
 
+	/* Callback Event Constants */
+	this.VNC_SERVER_INIT_COMPLETE = 0;
+	this.VNC_FRAME_BUFFER_UPDATE = 1;
 	this._callbacks = {};
 };
 
@@ -121,9 +123,15 @@ RFBClient.prototype.handleServerInit = function(data){
 		
 		this._vnc_server_init_received = true; // We're fucking ready to roll!
 		this._handshake_complete = true;
+<<<<<<< Updated upstream
 		//this.frameBufferUpdateRequest(0,0,this._framebuffer_width, this._framebuffer_height);
 		this.frameBufferUpdateRequest(0,0, 100, 100);
 		this.emit("serverInit");
+=======
+		this.frameBufferUpdateRequest(0,0,this._framebuffer_width, this._framebuffer_height);
+		
+		this.emit(this.VNC_SERVER_INIT_COMPLETE);
+>>>>>>> Stashed changes
 };
 
 RFBClient.prototype.clientInit = function(){
@@ -163,9 +171,11 @@ RFBClient.prototype.dataReceived = function(data){
 
 RFBClient.prototype.handleFrameBufferUpdate = function(data){
 	this.log("FrameBufferUpdate Received.");
+	var RECT_SIZE = 12;
 
 	var numRectangles = (data.charCodeAt(2) << 8) | data.charCodeAt(3);
 	var offset = 4;
+	this.log("numRectangles = " + numRectangles);
 	for(var i = 0; i < numRectangles; i++){
 		var x_pos = (data.charCodeAt(offset + 0) << 8) | data.charCodeAt(offset + 1);
 		var y_pos = (data.charCodeAt(offset + 2) << 8) | data.charCodeAt(offset + 3);
@@ -180,12 +190,9 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data){
 			var buffer_size = width * height * (this._bits_per_pixel / 8);
 			this.log("Rectangle: " + i + ", Encoding: RAW, x: " + x_pos + ", y: " + y_pos +  ", width: " + width + ", height: " + height +  ", buffer size: " + buffer_size);
 			
-			
-			
-			
 			offset += buffer_size;
 		} else {
-			this.log("Rectangle: " + i + ", Encoding: " + encodingType);
+			this.log("Rectangle: " + i + " / " + numRectangles + ", Encoding: " + encodingType);
 		}
 		
 		
