@@ -121,8 +121,8 @@ RFBClient.prototype.handleServerInit = function(data){
 		
 		this._vnc_server_init_received = true; // We're fucking ready to roll!
 		this._handshake_complete = true;
-		this.frameBufferUpdateRequest(0,0,this._framebuffer_width, this._framebuffer_height);
-		
+		//this.frameBufferUpdateRequest(0,0,this._framebuffer_width, this._framebuffer_height);
+		this.frameBufferUpdateRequest(0,0, 100, 100);
 		this.emit("serverInit");
 };
 
@@ -175,10 +175,14 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data){
 						   (data.charCodeAt(offset + 9) << 16) |
 						   (data.charCodeAt(offset + 10) << 8)  |
 						   (data.charCodeAt(offset + 11)));
-		
+		offset += 12;
 		if(encodingType === this.RFB_ENCODING_RAW){
 			var buffer_size = width * height * (this._bits_per_pixel / 8);
 			this.log("Rectangle: " + i + ", Encoding: RAW, x: " + x_pos + ", y: " + y_pos +  ", width: " + width + ", height: " + height +  ", buffer size: " + buffer_size);
+			
+			
+			
+			
 			offset += buffer_size;
 		} else {
 			this.log("Rectangle: " + i + ", Encoding: " + encodingType);
