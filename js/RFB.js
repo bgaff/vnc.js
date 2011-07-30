@@ -189,9 +189,9 @@ RFBClient.prototype.handleAuthentication = function(data){
 				resHex[i] = resArr[i].toString(16);
 			}
 		}
-		log('Challenge response ' + resHex);	
+		this.log('Challenge response ' + resHex);	
 		encodedResp = Base64.encodeIntArr(resArr,16);
-		log("Challenge encoded: " + encodedResp);
+		this.log("Challenge encoded: " + encodedResp);
 		this._vnc_challenge_result_sent = true;
 		this._tcpClient.send(encodedResp,'base64');
 		return;
