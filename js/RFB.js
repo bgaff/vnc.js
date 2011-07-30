@@ -47,6 +47,13 @@ var RFBClient = function(tcp_client, rfb_canvas) {
 	/* now we're done with handshaking */
 		this._handshake_complete = false;	
 
+
+	/* VNC Constants */
+	this.RFB_FRAME_BUFFER_UPDATE_REQUEST = 3;
+	this.RFB_FRAME_BUFFER_UPDATE = 0;
+	
+	this.RFB_ENCODING_RAW = 0;
+
 	this._callbacks = {};
 };
 
@@ -56,6 +63,30 @@ RFBClient.prototype.log = function(msg){
 
 RFBClient.prototype.alert = function(msg){
 	alert(msg);
+};
+
+RFBClient.prototype.frameBufferUpdateRequest = function(x, y, width, height){
+
+	var incremental = 0; // for now we're not going to deal with incremental updates
+	
+	var request = [];
+	request[0] = this.RFB_FRAME_BUFFER_UPDATE_REQUEST;
+	request[1] = incremental;
+	
+	// we have to determine the hi and lo bytes for x, y, width, and height.
+	// they are all 16bit values so we have to break them up into parts
+	// to work correctly
+	request[3] = (x & 0xFF);
+	request[2] = ((x & 0xFF00) >> 8);
+	request[5] = (y & 0xFF);
+	request[4] = ((y & 0xFF00) >> 8);
+	request[7] = (width & 0xFF);
+	request[6] = ((width & 0xFF00) >> 8);
+	request[9] = (height & 0xFF);
+	request[8] = ((height & 0xFF00) >> 8);
+	
+	var encodedRequest = Base64.encodeIntArr(request);
+	this._tcpClient.send(encodedRequest,'base64');
 };
 
 RFBClient.prototype.handleServerInit = function(data){
@@ -88,9 +119,10 @@ RFBClient.prototype.handleServerInit = function(data){
 		this.log("Server Init, True Color Flag: " + this._true_color_flag + ", Red Max: " + this._red_max + ", Green Max: " + this._green_max + ", Blue Max: " + this._blue_max);
 		this.log("Server Init, Red Shift: " + this._red_shift + ", Green Shift: " + this._green_shift + ", Blue Shift: " + this._blue_shift);
 		
-		this._server_init_received = true; // We're fucking ready to roll!
+		this._vnc_server_init_received = true; // We're fucking ready to roll!
 		this._handshake_complete = true;
-
+		this.frameBufferUpdateRequest(0,0,this._framebuffer_width, this._framebuffer_height);
+		
 		this.emit("serverInit");
 };
 
@@ -117,10 +149,44 @@ RFBClient.prototype.dataReceived = function(data){
 	} else if (this._vnc_challenge_result_sent && !this._authentication_complete){
 		this.authenticationResponse(decodedData);
 		return;
-	} else if (this._vnc_client_init_sent && !this._vnc_server_init_received) {
+	} else if (!this._vnc_server_init_received && this._vnc_client_init_sent) {
 		this.handleServerInit(decodedData);
 		return;
+	} else if (this._handshake_complete) {
+		/* we must examine the first byte to determine the type of packet it is */
+		var msgType = decodedData.charCodeAt(0);
+		if(msgType === this.RFB_FRAME_BUFFER_UPDATE){
+			this.handleFrameBufferUpdate(decodedData);
+		}
 	}
+};
+
+RFBClient.prototype.handleFrameBufferUpdate = function(data){
+	this.log("FrameBufferUpdate Received.");
+
+	var numRectangles = (data.charCodeAt(2) << 8) | data.charCodeAt(3);
+	var offset = 4;
+	for(var i = 0; i < numRectangles; i++){
+		var x_pos = (data.charCodeAt(offset + 0) << 8) | data.charCodeAt(offset + 1);
+		var y_pos = (data.charCodeAt(offset + 2) << 8) | data.charCodeAt(offset + 3);
+		var width = (data.charCodeAt(offset + 4) << 8) | data.charCodeAt(offset + 5);
+		var height = (data.charCodeAt(offset + 6) << 8) | data.charCodeAt(offset + 7);
+		var encodingType = ((data.charCodeAt(offset + 8) << 24) | 
+						   (data.charCodeAt(offset + 9) << 16) |
+						   (data.charCodeAt(offset + 10) << 8)  |
+						   (data.charCodeAt(offset + 11)));
+		
+		if(encodingType === this.RFB_ENCODING_RAW){
+			var buffer_size = width * height * (this._bits_per_pixel / 8);
+			this.log("Rectangle: " + i + ", Encoding: RAW, x: " + x_pos + ", y: " + y_pos +  ", width: " + width + ", height: " + height +  ", buffer size: " + buffer_size);
+			offset += buffer_size;
+		} else {
+			this.log("Rectangle: " + i + ", Encoding: " + encodingType);
+		}
+		
+		
+		
+	}	
 };
 
 RFBClient.prototype.authenticationResponse = function(data){
