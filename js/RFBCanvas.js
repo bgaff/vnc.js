@@ -10,6 +10,12 @@ RFBCanvas.prototype.resize = function(w, h) {
     this._canvas.height = h;
 };
 
+//getImageData(x, y, width, height)
+RFBCanvas.prototype.copyRect = function(x, y, w, h, src_x, src_y) {
+	var canvas_data = this._context.getImageData(src_x,src_y,w,h);
+	this._context.putImageData(canvas_data, x, y);
+};
+
 RFBCanvas.prototype.drawRect = function(x_offset, y_offset, w, h, rgba_data) {
 	//rgb_decoded = Base64.decodeStr(rgba_data);
     var canvas_data = this._context.createImageData(w, h);

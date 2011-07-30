@@ -50,12 +50,17 @@ var RFBClient = function(tcp_client, rfb_canvas) {
 	/* VNC Constants */
 	this.RFB_FRAME_BUFFER_UPDATE_REQUEST = 3;
 	this.RFB_FRAME_BUFFER_UPDATE = 0;
+	this.VNC_SET_PIXEL_FORMAT = 0;
+	this.VNC_SET_ENCODINGS = 2;
 	
 	this.RFB_ENCODING_RAW = 0;
+	this.RFB_ENCODING_COPYRECT = 1;
 
 	/* Callback Event Constants */
 	this.VNC_SERVER_INIT_COMPLETE = 0;
 	this.VNC_FRAME_BUFFER_UPDATE = 1;
+	this.VNC_FRAME_BUFFER_COPYRECT = 2;
+	
 	this._callbacks = {};
 	
 	this._processing_buffer = false;
@@ -76,13 +81,26 @@ RFBClient.prototype.alert = function(msg){
 	alert(msg);
 };
 
-RFBClient.prototype.frameBufferUpdateRequest = function(x, y, width, height){
+RFBClient.prototype.setEncodings = function(){
+	// tell the server we support both RAW and CopyRect encoding formats.
+	var request = [0,0,0,0,0,0,0,0];
+	request[0] = this.VNC_SET_ENCODINGS;
+	request[3] = 1;
+	request[7] = this.RFB_ENCODING_COPYRECT;
+	//request[11] = this.RFB_ENCODING_RAW;
+	
+	var encodedRequest = Base64.encodeIntArr(request);
+	this.log("Encoding request: " + encodedRequest);
+	this._tcpClient.send(encodedRequest,'base64');
+}
 
-	var incremental = 0; // for now we're not going to deal with incremental updates
+RFBClient.prototype.frameBufferUpdateRequest = function(x, y, width, height, incremental){
+
+	var incremt = incremental || 0; // for now we're not going to deal with incremental updates
 	
 	var request = [0,0,0,0,0,0,0,0,0,0];
 	request[0] = this.RFB_FRAME_BUFFER_UPDATE_REQUEST;
-	request[1] = incremental;
+	request[1] = incremt;
 	
 	// we have to determine the hi and lo bytes for x, y, width, and height.
 	// they are all 16bit values so we have to break them up into parts
@@ -130,15 +148,21 @@ RFBClient.prototype.handleServerInit = function(data){
 		this.log("Server Init, True Color Flag: " + this._true_color_flag + ", Red Max: " + this._red_max + ", Green Max: " + this._green_max + ", Blue Max: " + this._blue_max);
 		this.log("Server Init, Red Shift: " + this._red_shift + ", Green Shift: " + this._green_shift + ", Blue Shift: " + this._blue_shift);
 		
+		this.setEncodings(); /* tell the server we support CopyRect and Raw */
+			
 		this._vnc_server_init_received = true; // We're fucking ready to roll!
 		this._handshake_complete = true;
 		//this.frameBufferUpdateRequest(0,0,1440, 900);
-		this.frameBufferUpdateRequest(0,0,1440,900);
-		//for(x = 0; x < this._framebuffer_width; x+=25){
-		//	for(y = 0; y < this._framebuffer_height; y+=25){
-		//		this.frameBufferUpdateRequest(x,y,25,25);
-		//	}
-		//}
+		this.frameBufferUpdateRequest(0,0,1152,720);
+		//this.frameBufferUpdateRequest(0,0,400,400);
+		
+		var that = this;
+		var frameBufferUpdate = function(){
+			that.frameBufferUpdateRequest(0,0,1152,720,1);
+			//that.frameBufferUpdateRequest(0,0,400,400,1);
+		}
+		
+		setInterval(frameBufferUpdate,250); /* incremental update requests */
 		
 		
 		this.emit(this.VNC_SERVER_INIT_COMPLETE);
@@ -184,7 +208,7 @@ RFBClient.prototype.dataReceived = function(data){
 			if(msgType === this.RFB_FRAME_BUFFER_UPDATE){
 				this.handleFrameBufferUpdate(decodedData,decodedIntArr);
 			} else {
-				//this.log("Unkown message type: " + msgType);
+				this.log("Unkown message type: " + msgType);	
 			}
 		}
 	}
@@ -229,15 +253,13 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data,dataIntArr){
 		}
 		
 		
-	
-		
 	}
 
 	if(!this._processing_buffer){
 		// this is a new buffer window		
 		var numRectangles = (dataIntArr[2] << 8) | dataIntArr[3];
 		this.log("numRectangles = " + numRectangles);
-		
+		//if(numRectangles > 1) return;
 		var offset = 4;
 		for(var i = 0; i < numRectangles; i++){
 				var x_pos = (dataIntArr[offset + 0] << 8) | dataIntArr[offset + 1];
@@ -248,12 +270,12 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data,dataIntArr){
 								   (dataIntArr[offset + 9] << 16) |
 								   (dataIntArr[offset + 10] << 8)  |
 								   (dataIntArr[offset + 11]));
-								
+				offset += 12;
 				this._x = x_pos;
 				this._y = y_pos;
 				this._w = width;
 				this._h = height;
-			
+				var bytes_written = 0;
 				this.log("Frame width: " + width + ", height: " + height + ", x:" + x_pos + ", y:" + y_pos);
 				if(encodingType === this.RFB_ENCODING_RAW){
 						var buffer_size = width * height * (this._bits_per_pixel / 8);
@@ -263,13 +285,20 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data,dataIntArr){
 						this._total_bytes_expected = buffer_size;
 						
 						var total_bytes_available_now = dataIntArr.length - 16; // 16 byte header
-			
-						this._buffer = this._buffer.concat(dataIntArr.splice(16, 16 + total_bytes_available_now));
-						this._total_bytes_expected -= total_bytes_available_now;
+						if(total_bytes_available_now > this._total_bytes_expected){
+						 this._buffer = this._buffer.concat(dataIntArr.splice(16, 16 + this._total_bytes_expected));
+						 bytes_written = this._total_bytes_expected;
+						 this._total_bytes_expected = 0;
+						} else {
+						 this._buffer = this._buffer.concat(dataIntArr.splice(16, 16 + total_bytes_available_now));
+					 	 this._total_bytes_expected -= total_bytes_available_now;
+						 bytes_written = total_bytes_available_now;
+						}
 						
-						if(this._total_bytes_expected < 0)
+						if(this._total_bytes_expected < 0) {
 							this.log("WTF WE ARE LESS THAN ZERO!!!!");
-						
+							return;
+						}
 						if(this._total_bytes_expected === 0){
 							// we can send now.
 							this.log("Ready to render now...");
@@ -283,10 +312,25 @@ RFBClient.prototype.handleFrameBufferUpdate = function(data,dataIntArr){
 						}
 					
 						
-				} else {
-					//this.log("Unknown encoding type: " + encodingType);
+				} else if (encodingType === this.RFB_ENCODING_COPYRECT) {
+					this.log("Received a COPYRECT message");
+					vagina.true = x;
+					
+					var src_x_pos = (dataIntArr[offset + 12] << 8) | dataIntArr[offset + 1];
+					var src_y_pos = (dataIntArr[offset + 13] << 8) | dataIntArr[offset + 3];
+					
+					this.emit(this.VNC_FRAME_BUFFER_COPYRECT, {x: this._x, y: this._y, w: this._w, h: this._h, src_x: src_x_pos, src_y: src_y_pos});
+					
+					var total_bytes_available_now = dataIntArr.length - 20; // 16 byte header + 4 bytes for copyrect
+					if (total_bytes_available_now > 0){
+						var leftOvers = dataIntArr.slice(20, total_bytes_available_now);
+						this.handleFrameBufferUpdate(data,leftOvers);
+						return;
+					}
+					bytes_written = 4;
+					
 				}
-				
+				offset += bytes_written;
 		}
 	}
 };
