@@ -18,9 +18,33 @@ var RFBClient = function(tcp_client) {
 	/* we are either handling a VNC_AUTH_VNCAUTHENTICATION or hand shake is complete */
 		this._vnc_auth_challenge = '';
 		this._vnc_challenge_result_sent = false;
+		this._authentication_complete = false;
 		
-	 	this._authentication_complete = false;
-		this._handshake_complete = false;		
+	/* during initialization phase */
+		this._vnc_client_init_sent = false;
+		this._vnc_server_init_received = false;
+		
+	 	this._handshake_complete = false;	
+	
+	/* server init data */
+		this._framebuffer_width = 0;
+		this._framebuffer_height = 0;
+		
+		this._server_name_length = 0;
+		this._server_name = '';
+		
+	/* PIXEL_FORMAT, pg 17 */
+		this._bits_per_pixel = 0;
+		this._depth = 0;
+		this._big_endian_flag = 0;
+		this._true_color_flag = 0;
+		this._red_max = 0;
+		this._green_max = 0;
+		this._blue_max = 0;
+		this._red_shift = 0;
+		this._green_shift = 0;
+		this._blue_shift = 0;
+		
 };
 
 RFBClient.prototype.log = function(msg){
@@ -31,10 +55,52 @@ RFBClient.prototype.alert = function(msg){
 	alert(msg);
 };
 
+RFBClient.prototype.handleServerInit = function(data){
+		var width = (data.charCodeAt(0) << 8 | data.charCodeAt(1));
+		var height = (data.charCodeAt(2) << 8 | data.charCodeAt(3));
+		this._framebuffer_width = width;
+		this._framebuffer_height = height;
+		
+		this.log("Server Init, FrameBuffer Width: " + width + ", " + "Height: " + height);
+		
+		var name_length = (data.charCodeAt(20) << 24 | data.charCodeAt(21) << 16 | data.charCodeAt(22) << 8 | data.charCodeAt(23));
+		var name = data.substr(24, name_length);
+		this._server_name_length = name_length;
+		this._server_name = name;
+		
+		this.log("Server Init, Server Name: " + this._server_name + " (length: " + this._server_name_length + ")");
+		
+		this._bits_per_pixel = data.charCodeAt(4);
+		this._depth = data.charCodeAt(5);
+		this._big_endian_flag = data.charCodeAt(6) & 0xFF;
+		this._true_color_flag = data.charCodeAt(7) & 0xFF;
+		this._red_max = (data.charCodeAt(8) << 8 | data.charCodeAt(9));
+		this._green_max = (data.charCodeAt(10) << 8 | data.charCodeAt(11));
+		this._blue_max = (data.charCodeAt(12) << 8 | data.charCodeAt(13));
+		this._red_shift = data.charCodeAt(14);
+		this._green_shift = data.charCodeAt(15);
+		this._blue_shift = data.charCodeAt(16);
+		
+		this.log("Server Init, Bits Per Pixel: " + this._bits_per_pixel + ", Depth: " + this._depth + ", Big endian flag: " + this._big_endian_flag);
+		this.log("Server Init, True Color Flag: " + this._true_color_flag + ", Red Max: " + this._red_max + ", Green Max: " + this._green_max + ", Blue Max: " + this._blue_max);
+		this.log("Server Init, Red Shift: " + this._red_shift + ", Green Shift: " + this._green_shift + ", Blue Shift: " + this._blue_shift);
+		
+		this._server_init_received = true; // We're fucking ready to roll!
+};
+
+RFBClient.prototype.clientInit = function(){
+	// send a nonzero byte to tell the server we're willing to share the screen
+	this._vnc_client_init_sent = true;
+	var clientInitMsg = [1];
+	var clientInitEncoded = Base64.encodeIntArr(clientInitMsg, 1);
+	this.log("Client Init Msg: " + clientInitEncoded);
+	this._tcpClient.send(clientInitEncoded,'base64');
+};
+
 RFBClient.prototype.dataReceived = function(data){
 	var decodedData = Base64.decodeStr(data.data);
 	
-	this.log("data received: " + data.data);
+	//this.log("data received: " + data.data);
 	
 	if(!this._server_version_received){
 		this.handleServerVersion(decodedData);
@@ -45,17 +111,20 @@ RFBClient.prototype.dataReceived = function(data){
 	} else if (this._vnc_challenge_result_sent && !this._authentication_complete){
 		this.authenticationResponse(decodedData);
 		return;
+	} else if (this._vnc_client_init_sent && !this._vnc_server_init_received) {
+		this.handleServerInit(decodedData);
+		return;
 	}
 };
 
 RFBClient.prototype.authenticationResponse = function(data){
-	
 	if(data.charCodeAt(3) === 1){
 		this.alert("Incorrect VNC Authentication Password!");
 		this.log("Authentication Failed");
 	} else if ( data.charCodeAt(0) === 0 && data.charCodeAt(1) === 0 && data.charCodeAt(2) === 0 && data.charCodeAt(3) === 0 ){
 		this._authentication_complete = true;
 		this.log("Authentication Complete!");
+		this.clientInit();
 	}
 };
 

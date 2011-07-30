@@ -31,7 +31,7 @@
  });
 
  sock.on("data", function(msg){
-	log("data arrived: " + msg.data);
+	//log("data arrived: " + msg.data);
 	if(msg.encoding === 'base64'){
 		RFBClient.dataReceived(msg);
 	}
