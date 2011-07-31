@@ -89,7 +89,6 @@ RFBClient.prototype.setEncodings = function(){
 	request[0] = this.VNC_SET_ENCODINGS;
 	request[3] = 1;
 	request[7] = this.RFB_ENCODING_COPYRECT;
-	//request[11] = this.RFB_ENCODING_RAW;
 	
 	var encodedRequest = Base64.encodeIntArr(request);
 	this.log("Encoding request: " + encodedRequest);
@@ -154,14 +153,11 @@ RFBClient.prototype.handleServerInit = function(data){
 			
 		this._vnc_server_init_received = true; // We're fucking ready to roll!
 		this._handshake_complete = true;
-		//this.frameBufferUpdateRequest(0,0,1440, 900);
 		this.frameBufferUpdateRequest(0,0,1152,720);
-		//this.frameBufferUpdateRequest(0,0,400,400);
 		
 		var that = this;
 		var frameBufferUpdate = function(){
 			that.frameBufferUpdateRequest(0,0,1152,720,1);
-			//that.frameBufferUpdateRequest(0,0,400,400,1);
 		}
 		
 		setInterval(frameBufferUpdate,250); /* incremental update requests */
@@ -185,7 +181,6 @@ RFBClient.prototype.dataReceived = function(data){
 	var decodedIntArr = Base64.decodeIntArr(data.data);
 	
 	this.log("decodedDatalen :" + decodedData.length + ", arrLen: " + decodedIntArr.length );
-	//this.log("data received: " + data.data);
 	
 	if(!this._server_version_received){
 		this.handleServerVersion(decodedData);
@@ -200,20 +195,7 @@ RFBClient.prototype.dataReceived = function(data){
 		this.handleServerInit(decodedData);
 		return;
 	} else if (this._handshake_complete) {
-		/* we must examine the first byte to determine the type of packet it is */
-		//if(this._bytes_pending > 0)
-		//	this.handleFrameBufferUpdate(decodedData,decodedIntArr);
-		//if(this._processing_buffer){
 		this.processor.dataArrived(decodedIntArr);
-		//	this.handleFrameBufferUpdate(decodedData,decodedIntArr);
-		/*} else {
-			var msgType = decodedData.charCodeAt(0);
-			if(msgType === this.RFB_FRAME_BUFFER_UPDATE){
-				this.handleFrameBufferUpdate(decodedData,decodedIntArr);
-			} else {
-				this.log("Unkown message type: " + msgType);	
-			}
-		}*/
 	}
 };
 
