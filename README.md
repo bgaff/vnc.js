@@ -1,6 +1,6 @@
-vnc.js
+VNC.js
 ======
-vnc.js is a linkedin intern hackday project, read the blog post about vnc.js: http://engineering.linkedin.com/javascript/vncjs-how-build-javascript-vnc-client-24-hour-hackday
+VNC.js is a LinkedIn intern hackday 2011 2011 project, read the blog post about VNC.js: http://engineering.linkedin.com/javascript/vncjs-how-build-javascript-vnc-client-24-hour-hackday
 
 Disclaimer
 ----------
