@@ -153,11 +153,12 @@ RFBClient.prototype.handleServerInit = function(data){
 			
 		this._vnc_server_init_received = true; // We're fucking ready to roll!
 		this._handshake_complete = true;
-		this.frameBufferUpdateRequest(0,0,1152,720);
+
+		this.frameBufferUpdateRequest(0,0,width,height);
 		
 		var that = this;
 		var frameBufferUpdate = function(){
-			that.frameBufferUpdateRequest(0,0,1152,720,1);
+			that.frameBufferUpdateRequest(0,0,width,height,1);
 		}
 		
 		setInterval(frameBufferUpdate,250); /* incremental update requests */
@@ -217,20 +218,24 @@ var FrameBufferProcessor = function(_rfbClient) {
 	
 	this.dataArrived = function(dataIntArr){
 		this.global_buffer = this.global_buffer.concat(dataIntArr); /* we're already running, just tack this on */
-		
+
 		if(!this.header_received){
 			// the first 12 bytes are going to be our header information.
 			this.header_received = true;
 			this.number_rects_remaining = (	this.global_buffer[2] << 8) | 	this.global_buffer[3];
 			this.global_buffer = this.global_buffer.slice(4, this.global_buffer.length);
 			console.log("Expecting " + this.number_rects_remaining + " rectangles");
-		} 
-		
-		this.process();
+        }
+
+        this.process();
 	};
 	
 	this.process = function() {
 		if(!this.current_rect_header_received){
+            if (this.global_buffer.length < 12) {
+                return;
+            }
+
 			// read the rect header
 			var x_pos = (this.global_buffer[0] << 8) | this.global_buffer[1];
 			var y_pos = (this.global_buffer[2] << 8) | this.global_buffer[3];
@@ -313,9 +318,10 @@ RFBClient.prototype.handleAuthentication = function(data){
 		this.log("VNC Authentication could not be negotiated, the reason the server gave: " + error_reason);
 		this._tcpClient.disconnect(); // end the connection
 		return;
-	} else if(this._authentication_complete === this.VNC_AUTH_NONE) {
+	} else if(this._security_type === this.VNC_AUTH_NONE) {
 		this.log("No Authentication is required...Authentication Complete");
 		 this._authentication_complete = true;
+         this.clientInit();
 		 return;
 	} else if(this._security_type === this.VNC_AUTH_VNCAUTHENTICATION){
 		this.log("Authentication type is VNC Authentication");

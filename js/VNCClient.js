@@ -41,9 +41,6 @@ VNCClient.prototype.connect = function(host, port) {
 	//
 	var log = function(msg) { console.log(msg) };
 
-	var host = "127.0.0.1";
-	var port = 5900;
-
 	var sock = new TCPClient(host,port);
 	this._socket = sock;
 	var rfb_client = new RFBClient(sock);

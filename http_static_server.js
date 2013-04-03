@@ -46,7 +46,7 @@ server = function() {
 					response.end();
 			});
 			
-		    path.exists(filename, function(exists) {  
+		    fs.exists(filename, function(exists) {  
 		        if(!exists) {  
 			        util.log('err404 on ' + filename);
 		       		return sendResponse(response, 404, "text/html", "<html><body><h1>404 - Not Found</h1></body></html>");
