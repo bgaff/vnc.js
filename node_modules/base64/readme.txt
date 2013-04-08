@@ -1,3 +1,6 @@
+Update: this module may no longer be necessary as nodejs includes its own
+base64 encoding/decoding functions.
+
 This is a node.js C++ module that encodes and decodes to/from base64. Oh, and
 compared to all other modules, it actually works.
 

@@ -135,11 +135,8 @@ base64_encode_binding(const Arguments &args)
         );
     }
     else if (args[0]->IsString()) {
-        Local<String> v8str = args[0]->ToString();
-        char * buffer = (char *) malloc(v8str->Utf8Length());
-        v8str->WriteUtf8(buffer);
-        str = base64_encode((unsigned char *)buffer, strlen(buffer));
-        free(buffer);
+        String::Utf8Value v8str (args[0]->ToString());
+        str = base64_encode((unsigned char *) *v8str, v8str.length());
     }
     else
         return VException("Argument should be a buffer or a string");
