@@ -7,9 +7,10 @@ You need a VNC server to make this work, like: x11vnc on Ubuntu.
 This project was developed over 24 sleep deprived hours, the code is messy and undocumented.
 
 # How Use
+```
 node server.js
 open http://127.0.0.1:1024/
-
+```
 ## but ...
 
 ```
