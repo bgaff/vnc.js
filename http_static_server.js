@@ -4,11 +4,11 @@
 // Written By Brian Geffon (briangeffon {@} gmail {dot} com)
 //
 //
-var sys = require("sys"),  
+var sys = require("util"),  
     http = require("http"),
     url = require("url"),  
     path = require("path"),
-  	util = require('util'),
+  	util = sys||require('util'),
     fs = require("fs"),
 	qs = require("querystring");
 
